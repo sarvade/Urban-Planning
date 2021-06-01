@@ -1,4 +1,4 @@
-# Data Science Capstone Spring 2021 - City of Houston Heat
+# Mitigating Houston Heat using Spatial Econometrics  
 
 ## Project Description 
 The purpose of this project is to examine extreme heat locations in Houston and understand how green mitigation strategies can reduce the urban heat effect. 
@@ -57,3 +57,16 @@ The ```scripts/03_Modeling``` folder contains scripts detailing the models used 
 * Temporal_Modeling: Forecasts the trend of temperature in Houston over the next ten years.
 
 ### More information about this project can be found in the written reports.
+
+| `air` | `contrast` |
+| --- | --- | --- |
+| ![air skin](https://github.com/sarvade/portfolio/tree/master/images/figure3.png) | ![contrast skin](https://github.com/sarvade/portfolio/tree/master/images/figure9.png) | 
+
+| `air` | `contrast` |
+| --- | --- | --- |
+| ![air skin](https://github.com/sarvade/portfolio/tree/master/images/figure10.png) | ![contrast skin](https://github.com/sarvade/portfolio/tree/master/images/figure11.png) | 
+
+
+
+
+
