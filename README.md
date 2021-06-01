@@ -56,15 +56,8 @@ The ```scripts/03_Modeling``` folder contains scripts detailing the models used 
 * Spatial_Modeling: Performs OLS Regression, Spatial Lag, Spatial Error, and Gaussian Process Spatial Regression on the spatial dataset to identify the relationship between heat, landcover, and neighborhood population and predict effects of green mitigation strategies on selected socially vulnerable super neighborhoods.
 * Temporal_Modeling: Forecasts the trend of temperature in Houston over the next ten years.
 
-### More information about this project can be found in the written reports.
+### More information about this project can be found on my [portfolio](https://sarvade.github.io/portfolio/Urban-Heat-Island/)
 
-| `air` | `contrast` |
-| --- | --- | --- |
-| ![air skin](https://github.com/sarvade/portfolio/tree/master/images/figure3.png) | ![contrast skin](https://github.com/sarvade/portfolio/tree/master/images/figure9.png) | 
-
-| `air` | `contrast` |
-| --- | --- | --- |
-| ![air skin](https://github.com/sarvade/portfolio/tree/master/images/figure10.png) | ![contrast skin](https://github.com/sarvade/portfolio/tree/master/images/figure11.png) | 
 
 
 
