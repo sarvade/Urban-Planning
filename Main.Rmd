@@ -1,0 +1,192 @@
+---
+title: "Main Functions"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+gc()
+set.seed(123)
+knitr::opts_chunk$set(echo = FALSE)
+setwd(config::get("working_path"))
+```
+
+```{r functions}
+source("scripts/00_Util/Load_Data.R", local = knitr::knit_global())
+```
+
+```{r functions}
+# Combining this block and the one above might raise R session error.
+source("scripts/03_Modeling/Spatial_Modeling.R", local = knitr::knit_global())
+```
+
+```{r data, include=FALSE, warning=FALSE}
+# Input data
+spatial_grouped <- get_spatial_grouped(config::get("spatial_data"), config::get("rectangle_snb"), rectangle_id_250)
+```
+
+# Regression Analysis
+
+```{r models}
+model_formula <- "af_t ~ sum_pop100 +
+             is_road +
+             is_building +
+             is_park +
+             landcover_type_bare_land +
+             landcover_type_grassland +
+             landcover_type_palustrine_emergent_wetland +
+             landcover_type_palustrine_forested_wetland +
+             landcover_type_palustrine_scrub_shrub_wetland +
+             landcover_type_scrub_shrub +
+             landcover_type_unconsolidated_shore +
+             landcover_type_upland_trees +
+             landcover_type_water"
+weights <- get_weights(spatial_grouped)
+```
+
+## Baseline Linear Regression
+```{r ols}
+model_ols <- spatial_ols(spatial_grouped, model_formula)
+# Moran and Lagrange Multiplier diaganostics for spatial dependencies
+summary(model_ols)
+moran <- lm.morantest(model = model_ols, listw = weights, zero.policy = TRUE)
+print(moran)
+lagrange<-lm.LMtests(model = model_ols, listw = weights, zero.policy = TRUE,test='all')
+print(lagrange)
+```
+
+## Spatial Lag Model
+```{r spatial_lag}
+# Takes more than an hour to fit the model. Will load the fitted model instead.
+# model_lag <- spatial_lag(spatial_grouped, model_formula, weights)
+# summary(model_lag)
+```
+
+```{r}
+# Load fitted spatial lag model
+load("output/spatial_lag.Rdata")
+summary(model_lag)
+# Impact of fitted spatial lag model- used to interpret model coeeficients
+set.seed(123)
+W <- as(weights, "CsparseMatrix")
+trMatc <- trW(W, type="mult")
+lag_impact <- impacts(model_lag, tr=trMatc,R=200)
+summary(lag_impact, short=TRUE,zstats=TRUE)
+```
+## Spatial Error Model
+```{r spatial_error}
+# Takes more than an hour to fit the model. Will load the fitted model instead.
+# model_error <- spatial_error(spatial_grouped, model_formula, weights)
+# summary(model_error)
+```
+```{r}
+# Load fitted spatial error model
+load("output/spatial_error.Rdata")
+summary(model_error)
+```
+## Gaussian Process Model
+```{r gaussian_process}
+model_gp <- nngp(spatial_grouped)
+summary(model_gp)
+# Check significant regressors
+beta_hat <- model_gp$beta.hat
+beta_var <- diag(model_gp$beta.var)
+for (i in 1:ncol(beta_hat)) {
+  bhat <- beta_hat[i]
+  bsd <- sqrt(beta_var[i])
+  if (!(between(0, bhat - 2 * bsd, bhat + 2 * bsd))) {
+    show(bhat)
+    show(bhat - 2 * bsd) # Upper bound for 95% confidence interval
+    show(bhat + 2 * bsd) # Lower bound for 95% confidence interval
+  }
+}
+```
+
+# Define mitigation strategy
+```{r mitigation_strategy}
+LANDCOVER_DECREASE <- "landcover_type_impervious_developed" # Landcover type with decreased proportion
+LANDCOVER_INCREASE <- "landcover_type_upland_trees" # Landcover type with increased proportion
+P <- 0.2 # Landcover type proportion of change
+```
+
+# Predict temperature after mitigation with fitted models
+```{r mitigation_result}
+# Do not need to run this block.
+# This block just shows the steps to generate predictions after mitigation for one neighborhood, and results are already included in folder output for the following 5 neighborhoods.
+# For other neighborhoods, predidction takes around 1 hour for one neighborhood. 
+# GULFTON
+gulfton <- mitigation_predict(spatial_grouped, "GULFTON", LANDCOVER_DECREASE, LANDCOVER_INCREASE, P, model_gp, model_lag, model_error, model_formula, weights)
+write.csv(gulfton,'output/GULFTON.csv', row.names = FALSE)
+# WESTWOOD
+westwood <- mitigation_predict(spatial_grouped, "WESTWOOD", LANDCOVER_DECREASE, LANDCOVER_INCREASE, P, model_gp, model_lag, model_error, model_formula,weights)
+write.csv(westwood,'output/WESTWOOD.csv', row.names = FALSE)
+# GREATER UPTOWN
+greater_uptown <- mitigation_predict(spatial_grouped, "GREATER UPTOWN", LANDCOVER_DECREASE, LANDCOVER_INCREASE, P, model_gp, model_lag, model_error, model_formula, weights)
+write.csv(greater_uptown,'output/GREATER UPTOWN.csv', row.names = FALSE)
+# ELDRIDGE / WEST OAKS
+eldridge <- mitigation_predict(spatial_grouped, "ELDRIDGE / WEST OAKS", LANDCOVER_DECREASE, LANDCOVER_INCREASE, P, model_gp, model_lag, model_error, model_formula, weights)
+write.csv(eldridge,'output/ELDRIDGE.csv', row.names = FALSE)
+# BRAEBURN
+braeburn <- mitigation_predict(spatial_grouped, "BRAEBURN", LANDCOVER_DECREASE, LANDCOVER_INCREASE, P, model_gp, model_lag, model_error, model_formula, weights)
+write.csv(braeburn,'output/BRAEBURN.csv', row.names = FALSE)
+```
+
+```{r}
+# Load neighborhood predictions
+# GULFTON
+gulfton <- read.csv('output/GULFTON.csv')
+# Mean and 5%, 95% of temperature decrease
+diff_gulfton_SLM <- gulfton$temp_original-gulfton$temp_mitigated_SLM
+diff_gulfton_SEM <- gulfton$temp_original-gulfton$temp_mitigated_SEM
+diff_gulfton_GPR <- gulfton$temp_original-gulfton$temp_mitigated_GPR
+mean(diff_gulfton_SLM)
+quantile(diff_gulfton_SLM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_gulfton_SEM)
+quantile(diff_gulfton_SEM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_gulfton_GPR)
+quantile(diff_gulfton_GPR, probs = c(0.05,0.95), na.rm = TRUE)
+# WESTWOOD
+westwood <- read.csv('output/WESTWOOD.csv')
+diff_westwood_SLM <- westwood$temp_original-westwood$temp_mitigated_SLM
+diff_westwood_SEM <- westwood$temp_original-westwood$temp_mitigated_SEM
+diff_westwood_GPR <- westwood$temp_original-westwood$temp_mitigated_GPR
+mean(diff_westwood_SLM)
+quantile(diff_westwood_SLM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_westwood_SEM)
+quantile(diff_westwood_SEM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_westwood_GPR)
+quantile(diff_westwood_GPR, probs = c(0.05,0.95), na.rm = TRUE)
+# GREATER UPTOWN
+greater_uptown <- read.csv('output/GREATER UPTOWN.csv')
+diff_greater_uptown_SLM <- greater_uptown$temp_original-greater_uptown$temp_mitigated_SLM
+diff_greater_uptown_SEM <- greater_uptown$temp_original-greater_uptown$temp_mitigated_SEM
+diff_greater_uptown_GPR <- greater_uptown$temp_original-greater_uptown$temp_mitigated_GPR
+mean(diff_greater_uptown_SLM)
+quantile(diff_greater_uptown_SLM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_greater_uptown_SEM)
+quantile(diff_greater_uptown_SEM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_greater_uptown_GPR)
+quantile(diff_greater_uptown_GPR, probs = c(0.05,0.95), na.rm = TRUE)
+# ELDRIDGE / WEST OAKS
+eldridge <- read.csv('output/ELDRIDGE.csv')
+diff_eldridge_SLM <- eldridge$temp_original-eldridge$temp_mitigated_SLM
+diff_eldridge_SEM <- eldridge$temp_original-eldridge$temp_mitigated_SEM
+diff_eldridge_GPR <- eldridge$temp_original-eldridge$temp_mitigated_GPR
+mean(diff_eldridge_SLM)
+quantile(diff_eldridge_SLM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_eldridge_SEM)
+quantile(diff_eldridge_SEM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_eldridge_GPR)
+quantile(diff_eldridge_GPR, probs = c(0.05,0.95), na.rm = TRUE)
+# BRAEBURN
+braeburn <- read.csv('output/BRAEBURN.csv')
+diff_braeburn_SLM <- braeburn$temp_original-braeburn$temp_mitigated_SLM
+diff_braeburn_SEM <- braeburn$temp_original-braeburn$temp_mitigated_SEM
+diff_braeburn_GPR <- braeburn$temp_original-braeburn$temp_mitigated_GPR
+mean(diff_braeburn_SLM)
+quantile(diff_braeburn_SLM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_braeburn_SEM)
+quantile(diff_braeburn_SEM, probs = c(0.05,0.95), na.rm = TRUE)
+mean(diff_braeburn_GPR)
+quantile(diff_braeburn_GPR, probs = c(0.05,0.95), na.rm = TRUE)
+```

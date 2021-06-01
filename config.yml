@@ -1,0 +1,4 @@
+default:
+    spatial_data: "data/spatial_cleaned.csv"
+    rectangle_snb: "data/SN_to_Rects_250m.csv"
+    rectangle_data: "data/rectangles_250m.shp"

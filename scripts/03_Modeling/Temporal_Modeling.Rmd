@@ -1,0 +1,140 @@
+---
+title: "Temporal_Modeling"
+author: "Caleigh Page"
+date: "3/18/2021"
+output: html_document
+---
+
+## Libraries 
+```{r echo = TRUE}
+library(zoo)
+library(forecast)
+library(astsa)
+library(dplyr)
+library(tidyverse) 
+```
+
+## Loading Dataset
+```{r echo = TRUE}
+noaa <- read.csv("noaa.csv")
+```
+
+# Daily time series analysis
+## Creating and plotting time series object 
+```{r echo = TRUE, message = FALSE}
+# converting to numeric 
+noaa$HourlyDryBulbTemperature <- as.numeric(noaa$HourlyDryBulbTemperature)
+# filtering out NA air temperature values 
+noaa <- noaa %>%
+  filter(!is.na(noaa$HourlyDryBulbTemperature))
+# adding date format 
+noaa$date_format <- as.Date(noaa$date_format)
+
+# moving granularity to daily level using average temperatures
+daily <- noaa %>% 
+  group_by(date_format) %>% 
+  summarise(temp = mean(HourlyDryBulbTemperature))
+
+# creating time series object from average temperatures
+daily_ts <- ts(daily$temp, start=c(2016, 1), end=c(2021, 3), frequency=365)
+
+plot(daily_ts, xlab = "Year", ylab = "Average Temperature",
+     main = "Houston Average Daily Temperature")
+```
+
+## Decomposing seasonal time series 
+```{r echo = TRUE}
+# decomposing time series into different components
+decomposed_temp <- decompose(daily_ts, "additive")
+plot(decomposed_temp, xlab = "Year")
+
+# better plot 
+# get the time values for the time series
+Time <-  attributes(daily_ts)[[1]]
+Time <- seq(Time[1],Time[2], length.out=(Time[2]-Time[1])*Time[3])
+Time <- append(Time, 2021)
+
+# convert ts to data frame
+dat <-  cbind(Time, with(decomposed_temp, 
+                         data.frame(Observed=x, Trend=trend, Seasonal=seasonal, Random=random)))
+
+ggplot(gather(dat, component, value, -Time), aes(Time, value)) +
+  facet_grid(component ~ ., scales="free_y") +
+  geom_line() +
+  theme_bw() +
+  labs(x="Year", y = "Temperature") +
+  scale_x_continuous() +
+  ggtitle("Decomposed Daily Houston Temperature Time Series") +
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+## Model Fitting and Forecasting
+```{r echo = TRUE}
+# 10 year forecast 
+auto_daily <- forecast::auto.arima(daily_ts,seasonal=TRUE)
+
+daily_forecast <- forecast(auto_daily, h = 3650)
+plot(daily_forecast, xlab = "Year", ylab = "Temperature",
+     main = "Houston Average Forecasted Daily Temperatures")
+```
+
+# Monthly time series analysis 
+## Creating and plotting time series object
+```{r echo = TRUE, message = FALSE}
+# extracting month and year from date
+noaa$month <- lapply(noaa$date_format, month)
+noaa$year <- lapply(noaa$date_format, year)
+noaa$month <- as.numeric(noaa$month)
+noaa$year <- as.numeric(noaa$year)
+
+# moving granularity to monthly level using average temperatures
+monthly <- noaa %>%
+  group_by(year, month) %>%
+  summarize(temp = mean(HourlyDryBulbTemperature))
+
+# creating time series object from average temperatures
+monthly_ts <- ts(monthly$temp, start=c(2016, 1), end=c(2021, 3), frequency=12)
+
+plot(monthly_ts, xlab = "Year", ylab = "Average Temperature",
+     main = "Houston Average Monthly Temperature")
+```
+
+## Decomposing seasonal time series 
+```{r echo = TRUE}
+# decomposing time series into different components
+decomposed_temp <- decompose(monthly_ts, "additive")
+plot(decomposed_temp, xlab = "Year")
+
+# better plot 
+Time <-  attributes(monthly_ts)[[1]]
+Time <- seq(Time[1],Time[2], length.out=(Time[2]-Time[1])*Time[3])
+
+# convert ts to data frame
+dat <-  cbind(Time, with(decomposed_temp, 
+                         data.frame(Observed=x, Trend=trend, Seasonal=seasonal, Random=random)))
+
+ggplot(gather(dat, component, value, -Time), aes(Time, value)) +
+  facet_grid(component ~ ., scales="free_y") +
+  geom_line() +
+  theme_bw() +
+  labs(x="Year", y = "Temperature") +
+  scale_x_continuous() +
+  ggtitle("Decomposed Monthly Houston Temperature Time Series") +
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+## Model Fitting and Forecasting 
+```{r echo = TRUE}
+# 10 year forecast using an auto generated arima model
+auto_monthly <- forecast::auto.arima(monthly_ts,lambda = 0, seasonal=TRUE)
+fit(auto_monthly)
+monthly_forecast <- forecast(auto_monthly, h = 120)
+plot(monthly_forecast, xlab = "Year", ylab = "Temperature",
+     main = "Houston Average Forecasted Monthly Temperatures")
+
+# 10 year forecast using Holt Winters Method
+monthly_holt_winters <- forecast::hw(monthly_ts, lambda = "auto", biasadj = TRUE, h=108)
+plot(monthly_holt_winters, xlab = "Year", ylab = "Temperature",
+     main = "Houston Average Forecasted Monthly Temperatures")
+```
+

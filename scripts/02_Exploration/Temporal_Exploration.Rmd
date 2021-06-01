@@ -1,0 +1,191 @@
+---
+title: "Temporal_Exploration"
+author: "Caleigh Page"
+date: "3/14/2021"
+output: html_document
+---
+
+## Libraries 
+```{r echo = TRUE, warning = FALSE, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(reshape2)
+```
+
+## Loading in data
+```{r echo = TRUE}
+noaa <- read.csv("noaa.csv")
+```
+
+## Adding columns to help with data visualizaiton 
+```{r echo = TRUE}
+# date format for extracting time and date elements 
+noaa$date_time_lt <- as.POSIXlt(noaa$DATE, format="%Y-%m-%d %H:%M:%S", tz=Sys.timezone())
+
+# extracting time from POSIXlt class 
+noaa$time <- lapply(noaa$date_time_lt, function(x){
+  curr_hr <- unclass(x)$hour
+  curr_min <- unclass(x)$min
+  return(paste0(curr_hr,":",curr_min))
+})
+# specifying hour and minute that will be used in time_of_day
+noaa$hr <- lapply(noaa$date_time_lt, function(x){
+  curr_hr <- unclass(x)$hour
+  return(curr_hr)
+})
+
+noaa$min <- lapply(noaa$date_time_lt, function(x){
+  curr_min <- unclass(x)$min
+  return(curr_min)
+})
+
+# time_of_day correlates to times the HEAT data was measured 
+noaa$time_of_day <- ifelse(noaa$hr == 6 | (noaa$hr == 7 & noaa$min == 0), "morning",
+                    ifelse(noaa$hr == 15 | (noaa$hr == 16 & noaa$min == 0), "afternoon",
+                    ifelse(noaa$hr == 19 | (noaa$hr == 20 & noaa$min == 0), "evening", NA)))
+```
+
+## Daily temperatures averaged over the 3 stations
+```{r echo = TRUE, message = FALSE}
+# filtering out NA air temperature values 
+noaa_new <- noaa %>%
+  filter(!is.na(HourlyDryBulbTemperature))
+# converting to numeric 
+noaa_new$HourlyDryBulbTemperature <- as.numeric(noaa_new$HourlyDryBulbTemperature)
+noaa_new <- noaa_new %>%
+  filter(!is.na(HourlyDryBulbTemperature))
+# adding date format 
+noaa_new$date_format <- as.Date(noaa_new$date_format)
+
+daily <- noaa_new %>% 
+  group_by(date_format) %>% 
+  summarise(temp = mean(HourlyDryBulbTemperature)) 
+
+# plotting daily temperatures averaged over stations
+ggplot(data = daily, aes(x = date_format, y = temp)) + 
+  geom_line() + 
+  xlab("Date") + 
+  ylab("Average Daily Temperature") + 
+  ggtitle("Houston Average Daily Temperature") +
+  labs(subtitle = "2016-Present")
+```
+
+## Hourly temperatures
+```{r echo = TRUE}
+# creating hourly temperature dataset aggregated across all stations
+hourly <- noaa_new %>% 
+  group_by(date_time_ct) %>% 
+  summarise(temp = mean(HourlyDryBulbTemperature))
+
+# plotting hourly temperatures
+ggplot(data = hourly, aes(x = date_time_ct, y = temp)) + 
+  geom_line() + 
+  xlab("Date") + 
+  ylab("Hourly Temperature") + 
+  ggtitle("Houston Hourly Temperatures Averaged Across 3 Stations") +
+  labs(subtitle = "2016-Present") 
+```
+
+## Hourly Temperature for August 7, 2020
+```{r echo = TRUE}
+# specifying date of HEAT data collection
+heat_date <- subset(noaa_new, noaa_new$date_format == "2020-08-07")
+heat_date$hr <- as.numeric(heat_date$hr)
+
+# plotting for 7/8/20
+ggplot(data = heat_date, aes(x = hr, y = HourlyDryBulbTemperature, 
+                             group = station_name, color = station_name)) +
+  geom_line() + 
+  xlab("Hour") + 
+  ylab("Temperature") + 
+  ggtitle("Houston Hourly Temperature") + 
+  labs(subtitle = "August 7, 2020", color = "Station Name") + 
+  scale_x_continuous(breaks=seq(0, 24, by = 2)) 
+```
+
+## How temperatures vary by time of day 
+```{r echo = TRUE}
+# aggregating temperatures by time of day
+ToD <- noaa %>%
+  filter(!is.na(noaa$time_of_day)) %>%
+  group_by(date_format, time_of_day) %>% 
+  summarise(temp=mean(HourlyDryBulbTemperature))
+
+# plotting temperature variation in a day
+ggplot(data = ToD, aes(x = date_format, y = temp, group = time_of_day,
+                        color = time_of_day)) + 
+  geom_line() + 
+  xlab("Date") + 
+  ylab("Hourly Temperature") + 
+  ggtitle("Houston Hourly Temperatures by Time of Day") +
+  labs(color = "Time of Day", subtitle = "2016-Present") 
+```
+
+## Closer examination of summer months trends
+```{r echo = TRUE, message = FALSE}
+# creating dataset of just summer temperatures
+noaa_new$month <- lapply(noaa_new$date_format, month)
+noaa_new$year <- lapply(noaa_new$date_format, year)
+noaa_new$month <- as.numeric(noaa_new$month)
+noaa_new$year <- as.numeric(noaa_new$year)
+summer <- subset(noaa_new, noaa_new$month >= 6 & noaa_new$month <= 8)
+summer$month <- ifelse(summer$month == 6, "June",
+                ifelse(summer$month == 7, "July",
+                "August"))
+summer2 <- summer %>%
+  group_by(station_name, month, year) %>% 
+  summarise(temp = mean(HourlyDryBulbTemperature)) 
+  
+# plotting summer months temperatures
+ggplot(data = summer2, aes(x = year, y = temp, group = station_name,
+                        color = station_name)) + 
+  geom_line() + 
+  facet_wrap(~ month, ncol = 1) +
+  xlab("Year") + 
+  ylab("Average Temperature") + 
+  ggtitle("Houston Average Yearly Summer Temperatures") +
+  labs(color = "Weather Station", subtitle = "2016-Present") 
+```
+
+## Comparison between temperature and humidity 
+```{r echo = TRUE, message = FALSE}
+# filtering out NA humidity values
+noaa_humid <- noaa_new %>% 
+  filter(!is.na(noaa_new$HourlyRelativeHumidity) & !is.na(noaa_new$HourlyDryBulbTemperature))
+noaa_humid$Humidity <- as.numeric(noaa_humid$HourlyRelativeHumidity)
+humidity <- noaa_humid %>% 
+  filter(!is.na(noaa_humid$Humidity))
+
+# creating humidity dataset 
+hum_temp <- humidity %>%
+  group_by(month, year) %>%
+  summarise(humidity = mean(Humidity), temp = mean(HourlyDryBulbTemperature))
+
+hum_temp$month_word <- ifelse(hum_temp$month == 1, "Jan", 
+                       ifelse(hum_temp$month == 2, "Feb",
+                       ifelse(hum_temp$month == 3, "Mar",
+                       ifelse(hum_temp$month == 4, "Apr",
+                       ifelse(hum_temp$month == 5, "May",
+                       ifelse(hum_temp$month == 6, "Jun",
+                       ifelse(hum_temp$month == 7, "Jul",
+                       ifelse(hum_temp$month == 8, "Aug",
+                       ifelse(hum_temp$month == 9, "Sep",
+                       ifelse(hum_temp$month == 10, "Oct",
+                       ifelse(hum_temp$month == 11, "Nov", "Dec")))))))))))
+hum_temp$month_word = factor(hum_temp$month_word, levels = month.abb)
+
+# plotting humidity percentage and temperature comparison 
+ggplot(data = hum_temp, aes(x = month_word)) + 
+  geom_point(aes(y=temp, color = "Average Temperature")) + 
+  geom_point(aes(y=humidity, color = "Average Humidity")) + 
+  facet_wrap(~ year, ncol = 2) +
+  xlab("Month") + 
+  ylab("Temperature and Humidity Percentage") + 
+  ggtitle("Comparison Between Average Temperature and Humidity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 10),
+        legend.title = element_blank()) +
+  scale_color_manual(values = c("blue", "red"))
+```
+

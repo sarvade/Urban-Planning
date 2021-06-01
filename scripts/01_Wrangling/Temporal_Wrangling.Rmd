@@ -1,0 +1,41 @@
+---
+title: "Temporal_Wrangling"
+author: "Caleigh Page"
+date: "3/6/2021"
+output: html_document
+---
+
+## Libraries
+```{r echo = TRUE}
+library(stringr)
+```
+
+## Loading NOAA climate hourly data 
+```{r echo = TRUE}
+# getting rid of highly unpopulated columns 
+noaa <- noaa[ , -c(5:41, 46, 56, 58:93, 97:123)]
+```
+
+## Adding columns to help with data visualizaiton 
+```{r ech = TRUE}
+# adding station name from the id number 
+noaa$station_name <- ifelse(noaa$STATION == 72243012960, "Houston Intercontinental Airport",
+                     ifelse(noaa$STATION == 72244012918, "Houston William P. Hobby Airport",
+                     ifelse(noaa$STATION == 72059400188, "Houston Dunn Helistop", 0)))
+
+# formatting date and time 
+noaa$DATE <- str_replace(noaa$DATE, "T", " ")
+noaa$date_format <- as.Date(noaa$DATE)
+
+# adding date format for plotting 
+# other date columns will be added in exploration since classes cannot be stored in csv files 
+noaa$date_time_ct <- as.POSIXct(noaa$DATE, format="%Y-%m-%d %H:%M:%S", tz=Sys.timezone())
+```
+
+## Writing file to csv
+```{r echo = TRUE}
+write.csv(noaa, "noaa.csv")
+```
+
+
+
